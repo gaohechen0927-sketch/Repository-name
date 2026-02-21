@@ -15,6 +15,44 @@ SILICON_API_KEY = st.secrets["SILICON_API_KEY"]
 client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com/v1")
 
 st.set_page_config(page_title="全能视频总结神器", page_icon="🎬", layout="centered")
+import streamlit as st
+# ... 其他 import 保持不变 ...
+
+# --- 界面美化：背景图与联系方式 ---
+def add_custom_style():
+    st.markdown(
+        f"""
+        <style>
+        # 1. 设置全局背景图 (这里找一张简约的摄影感背景，或换成你自己的图片链接)
+        .stApp {{
+            background-image: url("https://szfilehelper.weixin.qq.com/cgi-bin/mmwebwx-bin/webwxgetmsgimg??&MsgID=4002358105742879346&skey=@crypt_1dfea641_448b9a1e606ae8258f5784fa21e04b03&mmweb_appid=wx_webfilehelper");
+            background-attachment: fixed;
+            background-size: cover;
+        }}
+        
+        # 2. 让中间的内容区域半透明，更有质感
+        .block-container {{
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 3rem;
+            border-radius: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+add_custom_style()
+
+# --- 侧边栏：添加你的个人信息 ---
+with st.sidebar:
+    st.image("https://via.placeholder.com/150", caption="高赫辰 - 开发者") # 这里以后可以换成你的头像链接
+    st.markdown("### 👨‍💻 关于作者")
+    st.write("我是高赫辰，一名对 AI 和摄影充满热情的开发者。")
+    st.divider()
+    st.markdown("18586091579")
+    st.success("微信：AKKKDDDTTT") # 替换成你真实的微信号
+    st.write("欢迎反馈建议或寻求合作！")
 st.title("🎬 全自动视频 AI 总结神器")
 st.markdown("支持 B站/抖音 等数百个平台。只需一个链接，剩下的交给 AI！")
 
