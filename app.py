@@ -50,7 +50,7 @@ with st.sidebar:
     st.markdown("### 👨‍💻 关于作者")
     st.write("我是高赫辰，一名对 AI 和摄影充满热情的开发者。")
     st.divider()
-    st.markdown("18586091579")
+    st.markdown("")
     st.success("微信：AKKKDDDTTT") # 替换成你真实的微信号
     st.write("欢迎反馈建议或寻求合作！")
 st.title("🎬 全自动视频 AI 总结神器")
@@ -61,6 +61,49 @@ video_url = st.text_input("🔗 请粘贴你想总结的视频链接：", placeh
 
 # --- 核心功能 1：抓取音频 ---
 def download_audio(url):
+import re  # 专门用来抠文字里的网址
+import requests # 用来追踪短链接的真实地址
+
+# --- 新增功能：从乱糟糟的分享文案里提取出网址 ---
+def extract_url(text):
+    url_pattern = r'https?://[^\s]+'
+    urls = re.findall(url_pattern, text)
+    if urls:
+        # 拿到网址后，如果是短链接，先把它还原成真实的长链接
+        raw_url = urls[0]
+        try:
+            # 模拟浏览器去访问一下，看它最后跳到哪
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+            response = requests.get(raw_url, headers=headers, allow_redirects=True, timeout=5)
+            return response.url
+        except:
+            return raw_url
+    return text
+
+# --- 修改后的抓取音频函数 ---
+def download_audio(url):
+    # 1. 先把用户输入的（可能带文字的）链接清洗一遍
+    clean_url = extract_url(url)
+    
+    # 2. 配置 yt-dlp，这次我们给它戴上“浏览器面具”
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'outtmpl': 'temp_audio.%(ext)s',
+        'quiet': True,
+        # ⚠️ 这一行是搞定抖音的关键：伪装成真正的浏览器
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'nocheckcertificate': True,
+        'ignoreerrors': True,
+    }
+    
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        # 使用清洗后的长链接下载
+        ydl.download([clean_url])
+    
+    files = glob.glob("temp_audio.*")
+    if files:
+        return files[0]
+    return None
     # 先清理之前可能残留的旧文件
     for old_file in glob.glob("temp_audio.*"):
         try: os.remove(old_file)
