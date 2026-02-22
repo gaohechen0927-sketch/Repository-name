@@ -19,33 +19,49 @@ if "display_content" not in st.session_state:
     st.session_state.display_content = ""
 
 # ================= 2. 界面视觉升级 =================
+# ================= 2. 界面视觉升级 (自定义摄影背景) =================
 def apply_custom_css():
+    # 👇 你的专属摄影大作链接已经完美融合在这里啦 👇
+    background_url = "https://raw.githubusercontent.com/gaohechen0927-sketch/Repository-name/main/mybg.jpg.jpg"
+    
     st.markdown(
-        """
+        f"""
         <style>
-        .stApp {
-            background-image: url("https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?q=80&w=2070&auto=format&fit=crop") !important;
+        /* 强制覆盖全屏背景 */
+        .stApp {{
+            background-image: url("{background_url}") !important;
             background-size: cover !important;
             background-position: center !important;
             background-attachment: fixed !important;
-        }
-        .main .block-container {
-            background-color: rgba(255, 255, 255, 0.85) !important;
-            backdrop-filter: blur(15px) !important;
+        }}
+        /* 中间内容区域磨砂半透明 */
+        .main .block-container {{
+            background-color: rgba(255, 255, 255, 0.8) !important;
+            backdrop-filter: blur(10px) !important;
             padding: 3rem !important;
             border-radius: 20px !important;
             box-shadow: 0 8px 32px 0 rgba(0,0,0,0.15) !important;
             margin-top: 2rem !important;
-        }
+        }}
+        /* 让按钮更好看一点 */
+        .stButton button {{
+            background-color: #ff4b4b !important;
+            color: white !important;
+            border-radius: 10px !important;
+            font-weight: bold !important;
+            transition: all 0.3s ease !important;
+        }}
+        .stButton button:hover {{
+            transform: scale(1.02) !important;
+            box-shadow: 0 4px 12px rgba(255, 75, 75, 0.3) !important;
+        }}
         </style>
         """,
         unsafe_allow_html=True
     )
 
 apply_custom_css()
-def apply_custom_css():
-    # 👇👇👇 你的专属摄影大作链接已经填好啦！ 👇👇👇
-    background_url = "https://raw.githubusercontent.com/gaohechen0927-sketch/Repository-name/main/mybg.jpg.jpg"
+
 
 # ================= 3. 核心功能引擎 (双通道下载) =================
 def extract_clean_url(text):
