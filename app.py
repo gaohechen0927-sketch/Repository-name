@@ -43,6 +43,9 @@ def apply_custom_css():
     )
 
 apply_custom_css()
+def apply_custom_css():
+    # 👇👇👇 你的专属摄影大作链接已经填好啦！ 👇👇👇
+    background_url = "https://raw.githubusercontent.com/gaohechen0927-sketch/Repository-name/main/mybg.jpg.jpg"
 
 # ================= 3. 核心功能引擎 (双通道下载) =================
 def extract_clean_url(text):
