@@ -44,32 +44,44 @@ def apply_custom_css():
 
 apply_custom_css()
 
-# ================= 3. 核心功能引擎 (精准识别) =================
+# ================= 3. 核心功能引擎 (双通道下载) =================
 def extract_clean_url(text):
-    """
-    使用极其严格的 URL 正则表达式。
-    不管分享文案里有多少中文、空格、表情包或特殊符号，只把纯净的 https 链接剥离出来。
-    """
     url_pattern = r"https?://[-A-Za-z0-9+&@#/%?=~_|!:,.;]+[-A-Za-z0-9+&@#/%=~_|]"
     urls = re.findall(url_pattern, text)
-    if urls:
-        return urls[0]
-    return None
+    return urls[0] if urls else None
 
 def download_audio(url):
-    """信任 yt-dlp 原生解析能力，直接处理短链接"""
+    """双通道智能下载：抖音走第三方 API，其他走 yt-dlp"""
     for f in glob.glob("temp_audio.*"):
         try: os.remove(f)
         except: pass
 
-    # 去掉了之前的伪装头，让 yt-dlp 自己决定如何最高效地与 B站/抖音 服务器握手
+    # 🚀 通道 A：专门对付抖音的“偷渡”方案
+    if "douyin.com" in url:
+        try:
+            # 调用全网知名的免费无水印解析 API
+            api_url = f"https://tenapi.cn/v2/video?url={url}"
+            response = requests.get(api_url, timeout=15).json()
+            
+            if response.get("code") == 200:
+                music_url = response["data"]["music"]
+                # 直接将音频数据下载到本地
+                audio_data = requests.get(music_url, timeout=15).content
+                with open("temp_audio.mp3", "wb") as f:
+                    f.write(audio_data)
+                return "temp_audio.mp3"
+            else:
+                raise Exception("免费 API 接口暂时罢工了")
+        except Exception as e:
+            raise Exception(f"抖音解析失败，原因：{str(e)}")
+
+    # 🚜 通道 B：B站等其他网站的常规抓取方案
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': 'temp_audio.%(ext)s',
         'quiet': True,
         'no_warnings': True,
     }
-    
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
     
