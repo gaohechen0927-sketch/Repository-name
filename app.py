@@ -1,155 +1,95 @@
 import streamlit as st
 import yt_dlp
 import requests
+import re
 import glob
 import os
 from openai import OpenAI
 
-# ================= 配置区 =================
-# 让代码去系统后台的“秘密金库”里找钥匙，绝对安全！
+# ================= 1. 基础配置 =================
+st.set_page_config(page_title="全能视频总结神器", page_icon="🎬", layout="centered")
+
 DEEPSEEK_API_KEY = st.secrets["DEEPSEEK_API_KEY"]
 SILICON_API_KEY = st.secrets["SILICON_API_KEY"]
-# ==========================================
-
-# 初始化 AI 大脑
 client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com/v1")
 
-st.set_page_config(page_title="全能视频总结神器", page_icon="🎬", layout="centered")
-import streamlit as st
-# ... 其他 import 保持不变 ...
+if "history" not in st.session_state:
+    st.session_state.history = []
+if "display_content" not in st.session_state:
+    st.session_state.display_content = ""
 
-# --- 界面美化：背景图与联系方式 ---
-def add_custom_style():
+# ================= 2. 界面视觉升级 =================
+def apply_custom_css():
     st.markdown(
-        f"""
+        """
         <style>
-        # 1. 设置全局背景图 (这里找一张简约的摄影感背景，或换成你自己的图片链接)
-        .stApp {{
-            background-image: url("https://szfilehelper.weixin.qq.com/cgi-bin/mmwebwx-bin/webwxgetmsgimg??&MsgID=4002358105742879346&skey=@crypt_1dfea641_448b9a1e606ae8258f5784fa21e04b03&mmweb_appid=wx_webfilehelper");
-            background-attachment: fixed;
-            background-size: cover;
-        }}
-        
-        # 2. 让中间的内容区域半透明，更有质感
-        .block-container {{
-            background-color: rgba(255, 255, 255, 0.9);
-            padding: 3rem;
-            border-radius: 20px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        }}
+        .stApp {
+            background-image: url("https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?q=80&w=2070&auto=format&fit=crop") !important;
+            background-size: cover !important;
+            background-position: center !important;
+            background-attachment: fixed !important;
+        }
+        .main .block-container {
+            background-color: rgba(255, 255, 255, 0.85) !important;
+            backdrop-filter: blur(15px) !important;
+            padding: 3rem !important;
+            border-radius: 20px !important;
+            box-shadow: 0 8px 32px 0 rgba(0,0,0,0.15) !important;
+            margin-top: 2rem !important;
+        }
         </style>
         """,
         unsafe_allow_html=True
     )
 
-add_custom_style()
+apply_custom_css()
 
-# --- 侧边栏：添加你的个人信息 ---
-with st.sidebar:
-    st.image("https://via.placeholder.com/150", caption="高赫辰 - 开发者") # 这里以后可以换成你的头像链接
-    st.markdown("### 👨‍💻 关于作者")
-    st.write("我是高赫辰，一名对 AI 和摄影充满热情的开发者。")
-    st.divider()
-    st.markdown("")
-    st.success("微信：AKKKDDDTTT") # 替换成你真实的微信号
-    st.write("欢迎反馈建议或寻求合作！")
-st.title("🎬 全自动视频 AI 总结神器")
-st.markdown("支持 B站/抖音 等数百个平台。只需一个链接，剩下的交给 AI！")
-
-# 用户输入链接
-video_url = st.text_input("🔗 请粘贴你想总结的视频链接：", placeholder="例如：https://www.bilibili.com/video/BV1GJ411x7h7")
-
-# --- 核心功能 1：抓取音频 ---
-def download_audio(url):
-import re  # 专门用来抠文字里的网址
-import requests # 用来追踪短链接的真实地址
-
-# --- 新增功能：从乱糟糟的分享文案里提取出网址 ---
-def extract_url(text):
-    url_pattern = r'https?://[^\s]+'
+# ================= 3. 核心功能引擎 (精准识别) =================
+def extract_clean_url(text):
+    """
+    使用极其严格的 URL 正则表达式。
+    不管分享文案里有多少中文、空格、表情包或特殊符号，只把纯净的 https 链接剥离出来。
+    """
+    url_pattern = r"https?://[-A-Za-z0-9+&@#/%?=~_|!:,.;]+[-A-Za-z0-9+&@#/%=~_|]"
     urls = re.findall(url_pattern, text)
     if urls:
-        # 拿到网址后，如果是短链接，先把它还原成真实的长链接
-        raw_url = urls[0]
-        try:
-            # 模拟浏览器去访问一下，看它最后跳到哪
-            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
-            response = requests.get(raw_url, headers=headers, allow_redirects=True, timeout=5)
-            return response.url
-        except:
-            return raw_url
-    return text
+        return urls[0]
+    return None
 
-# --- 修改后的抓取音频函数 ---
 def download_audio(url):
-    # 1. 先把用户输入的（可能带文字的）链接清洗一遍
-    clean_url = extract_url(url)
-    
-    # 2. 配置 yt-dlp，这次我们给它戴上“浏览器面具”
+    """信任 yt-dlp 原生解析能力，直接处理短链接"""
+    for f in glob.glob("temp_audio.*"):
+        try: os.remove(f)
+        except: pass
+
+    # 去掉了之前的伪装头，让 yt-dlp 自己决定如何最高效地与 B站/抖音 服务器握手
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': 'temp_audio.%(ext)s',
         'quiet': True,
-        # ⚠️ 这一行是搞定抖音的关键：伪装成真正的浏览器
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'nocheckcertificate': True,
-        'ignoreerrors': True,
+        'no_warnings': True,
     }
     
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        # 使用清洗后的长链接下载
-        ydl.download([clean_url])
-    
-    files = glob.glob("temp_audio.*")
-    if files:
-        return files[0]
-    return None
-    # 先清理之前可能残留的旧文件
-    for old_file in glob.glob("temp_audio.*"):
-        try: os.remove(old_file)
-        except: pass
-
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'outtmpl': 'temp_audio.%(ext)s', # 固定名字前缀，方便我们等下找
-        'quiet': True, # 让终端安静点，不刷屏
-    }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
     
-    # 找一下下载下来的文件到底叫什么后缀 (m4a, webm 等)
     files = glob.glob("temp_audio.*")
-    if files:
-        return files[0]
-    return None
+    return files[0] if files else None
 
-# --- 核心功能 2：超级耳朵 (语音转文字) ---
 def audio_to_text(file_path):
     url = "https://api.siliconflow.cn/v1/audio/transcriptions"
-    # 硅基流动提供的极速中文识别模型
-    data = {"model": "FunAudioLLM/SenseVoiceSmall", "response_format": "text"}
     headers = {"Authorization": f"Bearer {SILICON_API_KEY}"}
-    
-    with open(file_path, "rb") as file:
-        files = {"file": file}
-        response = requests.post(url, files=files, data=data, headers=headers)
+    data = {"model": "FunAudioLLM/SenseVoiceSmall", "response_format": "text"}
+    with open(file_path, "rb") as f:
+        response = requests.post(url, files={"file": f}, data=data, headers=headers)
     
     if response.status_code == 200:
         return response.text
     else:
-        raise Exception(f"耳朵听写失败啦: {response.text}")
+        raise Exception(f"耳朵听写失败: {response.text}")
 
-# --- 核心功能 3：AI 大脑总结 ---
 def summarize_text(text):
-    prompt = f"""
-    你是一个专业的视频总结助手。请根据以下提取出的视频语音文本，输出结构化的总结：
-    1. 【核心主题】：用一句话概括视频在讲什么。
-    2. 【干货提取】：提取 3-5 个核心要点，精简有力。
-    3. 【金句/亮点】：如果有特别精彩的观点，请列出1-2条。
-    
-    以下是视频文本内容：
-    {text}
-    """
+    prompt = f"你是一个专业的视频总结助手。请提取以下视频文本的核心主题、干货要点和金句亮点：\n\n{text}"
     response = client.chat.completions.create(
         model="deepseek-chat",
         messages=[{"role": "user", "content": prompt}],
@@ -157,36 +97,63 @@ def summarize_text(text):
     )
     return response.choices[0].message.content
 
-# ================ 交互逻辑 ================
+# ================= 4. 网页布局与交互 =================
+with st.sidebar:
+    st.markdown("### 👨‍💻 关于作者")
+    st.write("我是高赫辰，一名对AI与摄影充满热情的高一学生。")
+    st.success("📱 微信：AKKKDDDTTT")
+    st.divider()
+    
+    st.markdown("### 📜 历史总结记录")
+    if not st.session_state.history:
+        st.info("还没有总结过视频哦，快去试试吧！")
+    else:
+        for i, item in enumerate(reversed(st.session_state.history)):
+            if st.button(f"🎬 {item['title']}", key=f"hist_{i}"):
+                st.session_state.display_content = item['summary']
+
+st.title("🎬 全能视频 AI 总结神器")
+st.markdown("支持 B站 / 抖音。**直接粘贴APP里的分享文案即可，不需要单独抠网址！**")
+
+user_input = st.text_input("🔗 请在此粘贴：", placeholder="例如：【数码博主的年度推荐】 https://b23.tv/slYxUzF")
+
 if st.button("🚀 一键提取并总结"):
-    if not video_url:
+    if not user_input:
         st.warning("⚠️ 老板，还没输入链接呢！")
     else:
-        try:
-            with st.status("AI 运转中，请端杯茶稍作等待...", expanded=True) as status:
+        with st.status("AI 引擎全速运转中...", expanded=True) as status:
+            try:
+                st.write("1️⃣ 正在智能剔除多余文案，锁定真实链接...")
+                clean_url = extract_clean_url(user_input)
+                if not clean_url:
+                    st.error("❌ 没在文本里找到有效的网址，请检查输入！")
+                    st.stop()
                 
-                st.write("1️⃣ 正在强行突破次元壁，抓取视频声音...")
-                audio_file = download_audio(video_url)
+                st.write(f"👉 成功锁定目标：{clean_url}")
+                    
+                st.write("2️⃣ 突破次元壁，下载音频中 (视时长大约需要 5-15 秒)...")
+                audio_file = download_audio(clean_url)
                 if not audio_file:
-                    st.error("抓取失败！请检查链接是否正确。")
+                    st.error("❌ 音频抓取失败，该视频可能设置了权限防抓取。")
                     st.stop()
                     
-                st.write("2️⃣ 超级耳朵已开启，正在疯狂速记成文字...")
+                st.write("3️⃣ 召唤超级耳朵，听写转换中...")
                 transcript = audio_to_text(audio_file)
                 
-                st.write("3️⃣ 大脑高速运转，正在提炼全篇精华...")
+                st.write("4️⃣ 大脑深度思考，生成提炼总结...")
                 summary = summarize_text(transcript)
                 
-                status.update(label="✅ 全部搞定！", state="complete", expanded=False)
-            
-            # 展示最终成果！
-            st.divider()
-            st.success("🎉 总结完成！以下是视频的核心精华：")
-            st.markdown(summary)
-            
-            # (可选) 展开查看原始听写的文字，方便核对
-            with st.expander("🧐 想看看 AI 听写出来的原始逐字稿？点击展开"):
-                st.write(transcript)
+                # 存入历史记录
+                short_title = user_input[:15] + "..." if len(user_input) > 15 else user_input
+                st.session_state.history.append({"title": short_title, "summary": summary})
+                st.session_state.display_content = summary
                 
-        except Exception as e:
-            st.error(f"❌ 运行中出现了一点小意外：{e}")
+                status.update(label="✅ 全部处理完成！", state="complete", expanded=False)
+            except Exception as e:
+                status.update(label="❌ 出现错误！", state="error")
+                st.error(f"抱歉出错了，具体信息：{str(e)}")
+
+# 集中显示
+if st.session_state.display_content:
+    st.divider()
+    st.markdown(st.session_state.display_content)
