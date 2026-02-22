@@ -4,21 +4,25 @@ import requests
 import re
 import glob
 import os
-from openai import OpenAI
+import google.generativeai as genai
 
-# ================= 1. 基础配置 =================
+# ================= 1. 基础配置与大模型初始化 =================
 st.set_page_config(page_title="GHC AI | Vision", page_icon="🍏", layout="centered")
 
-DEEPSEEK_API_KEY = st.secrets["DEEPSEEK_API_KEY"]
+# 读取双引擎钥匙
+GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 SILICON_API_KEY = st.secrets["SILICON_API_KEY"]
-client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com/v1")
+
+# 唤醒 Google Gemini 引擎
+genai.configure(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel('gemini-2.5-pro')
 
 if "history" not in st.session_state:
     st.session_state.history = []
 if "display_content" not in st.session_state:
     st.session_state.display_content = ""
 
-# ================= 2. 界面视觉升级 (Apple 顶级毛玻璃美学) =================
+# ================= 2. Apple 级 UI 美化引擎 =================
 def apply_apple_css():
     background_url = "https://raw.githubusercontent.com/gaohechen0927-sketch/Repository-name/main/mybg.jpg.jpg"
     st.markdown(
@@ -86,11 +90,9 @@ def apply_apple_css():
         [data-testid="stSidebar"] {{
             background-color: rgba(240, 240, 245, 0.75) !important;
             backdrop-filter: blur(20px) !important;
-            -webkit-backdrop-filter: blur(20px) !important;
             border-right: 1px solid rgba(255,255,255,0.3) !important;
         }}
         
-        /* 美化选项卡 Tab 的样式 */
         .stTabs [data-baseweb="tab-list"] {{
             gap: 24px;
             background-color: transparent;
@@ -114,19 +116,20 @@ def apply_apple_css():
 
 apply_apple_css()
 
-# ================= 3. 核心功能引擎 =================
+# ================= 3. 核心功能引擎 (抗拥堵多重路由) =================
 def extract_clean_url(text):
     if not text: return None
     url_pattern = r"https?://[-A-Za-z0-9+&@#/%?=~_|!:,.;]+[-A-Za-z0-9+&@#/%=~_|]"
     urls = re.findall(url_pattern, text)
     return urls[0] if urls else None
 
-# 🚀 新增：专门用于抓取视频信息（文案、无水印链接）的函数
 def fetch_douyin_info(url):
+    """四重防拥堵轮询系统"""
     apis = [
         f"https://api.lolimi.cn/API/douyin/api.php?url={url}",
         f"https://tenapi.cn/v2/video?url={url}",
-        f"https://api.yujn.cn/api/douyin?url={url}"
+        f"https://api.yujn.cn/api/douyin?url={url}",
+        f"https://api.vvhan.com/api/douyin?url={url}"
     ]
     for api in apis:
         try:
@@ -137,6 +140,12 @@ def fetch_douyin_info(url):
                     "video": res["data"].get("video") or res["data"].get("url"),
                     "music": res["data"].get("music")
                 }
+            elif res.get("success"):
+                return {
+                    "title": res.get("title", "未提取到文案"),
+                    "video": res.get("video") or res.get("url"),
+                    "music": res.get("music")
+                }
         except: continue
     return None
 
@@ -146,7 +155,21 @@ def download_media(url):
         except: pass
 
     if "douyin.com" in url:
-        raise Exception("抖音防火墙拦截。请直接使用下方【上传视频】功能，100%成功率！")
+        info = fetch_douyin_info(url)
+        if not info or not info.get("video"):
+            raise Exception("抖音反爬系统发威，4个节点均被拥堵。建议使用下方【上传视频】功能，零延迟 100% 成功！")
+        
+        media_url = info.get("music") or info.get("video")
+        try:
+            headers = {'User-Agent': 'Mozilla/5.0'}
+            media_data = requests.get(media_url, headers=headers, timeout=20).content
+            ext = "mp3" if ".mp3" in media_url else "mp4"
+            filename = f"temp_media.{ext}"
+            with open(filename, "wb") as f:
+                f.write(media_data)
+            return filename
+        except:
+            raise Exception("成功突破防线，但在下载视频时网络中断。")
 
     ydl_opts = {'format': 'bestaudio/best', 'outtmpl': 'temp_media.%(ext)s', 'quiet': True, 'no_warnings': True}
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -165,12 +188,9 @@ def audio_to_text(file_path):
 
 def summarize_text(text):
     prompt = f"你是一个专业的视频总结助手。请提取以下视频文本的核心主题、干货要点和金句亮点，排版要有极简高级感：\n\n{text}"
-    response = client.chat.completions.create(
-        model="deepseek-chat",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.3
-    )
-    return response.choices[0].message.content
+    # 核心更改：使用强大的 Gemini 生成逻辑
+    response = model.generate_content(prompt)
+    return response.text
 
 # ================= 4. 网页布局与交互 =================
 with st.sidebar:
@@ -187,22 +207,21 @@ with st.sidebar:
 
 st.markdown("<h1 style='text-align: center; color: #1d1d1f;'>Vision AI</h1>", unsafe_allow_html=True)
 
-# 🚀 引入高级选项卡设计
 tab1, tab2 = st.tabs(["✨ AI 视频总结暗房", "🧰 无水印与文案提取"])
 
 # ----------------- Tab 1: AI 视频总结 -----------------
 with tab1:
-    st.markdown("<p style='text-align: center; color: #1d1d1f; font-size: 16px; margin-top: 10px;'>智能提炼，一眼即见核心。</p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #1d1d1f; font-size: 16px; margin-top: 10px;'>搭载 Google Gemini 双引擎，一眼即见核心。</p>", unsafe_allow_html=True)
     
-    user_input = st.text_input("🔗 方式一：粘贴链接", placeholder="B站等平台推荐直接粘贴分享链接...", key="ai_input")
+    user_input = st.text_input("🔗 方式一：粘贴链接", placeholder="B站/抖音 分享链接...", key="ai_input")
     st.markdown("<p style='text-align: center; color: #1d1d1f; font-size: 14px; margin: -10px 0 10px 0;'>— 或 —</p>", unsafe_allow_html=True)
-    uploaded_file = st.file_uploader("📂 方式二：直接传文件", type=['mp4', 'mp3', 'm4a', 'wav'], help="抖音视频防拦截神器！")
+    uploaded_file = st.file_uploader("📂 方式二：直接传视频文件", type=['mp4', 'mp3', 'm4a', 'wav'], help="防拦截神器！")
 
     if st.button("开始解析 (Start)", key="ai_btn"):
         if not user_input and not uploaded_file:
             st.warning("⚠️ 请输入链接或上传文件哦")
         else:
-            with st.status("Apple 芯片引擎启动中...", expanded=True) as status:
+            with st.status("Gemini 核心引擎启动中...", expanded=True) as status:
                 try:
                     media_file = None
                     input_title = "本地文件解析"
@@ -225,7 +244,7 @@ with tab1:
                         
                     st.write("⏳ 神经网络识别转换中...")
                     transcript = audio_to_text(media_file)
-                    st.write("🧠 大语言模型提炼中...")
+                    st.write("🧠 Gemini 深度思考提炼中...")
                     summary = summarize_text(transcript)
                     
                     st.session_state.history.append({"title": input_title, "summary": summary})
@@ -245,7 +264,7 @@ with tab1:
             </div>""", unsafe_allow_html=True
         )
 
-# ----------------- Tab 2: 无水印与文案提取 (新功能) -----------------
+# ----------------- Tab 2: 无水印与文案提取 -----------------
 with tab2:
     st.markdown("<p style='text-align: center; color: #1d1d1f; font-size: 16px; margin-top: 10px;'>一键去除抖音水印，提取原视频与爆款文案。</p>", unsafe_allow_html=True)
     
@@ -255,26 +274,23 @@ with tab2:
         if not tool_input:
             st.warning("⚠️ 请先粘贴抖音链接哦")
         else:
-            with st.spinner("正在呼叫黑客接口拦截数据..."):
+            with st.spinner("正在四重轮询拦截数据..."):
                 clean_url = extract_clean_url(tool_input)
                 if not clean_url:
                     st.error("❌ 没找到链接，请检查输入")
                 else:
                     info = fetch_douyin_info(clean_url)
                     if info and info.get("video"):
-                        st.success("✅ 拦截成功！")
+                        st.success("✅ 拦截成功！无任何广告。")
                         
-                        # 展示文案并提供一键复制框
                         st.markdown("### 📝 视频文案")
-                        st.code(info['title'], language="text") # st.code 自带一键复制按钮
+                        st.code(info['title'], language="text") 
                         
-                        st.markdown("### 🎬 无水印视频")
-                        # 直接在网页播放无水印视频，右下角自带下载按钮
+                        st.markdown("### 🎬 无水印视频 (可保存)")
                         st.video(info['video'])
                         
-                        # 提供原背景音乐试听
                         if info.get("music"):
                             st.markdown("### 🎵 原声背景音乐")
                             st.audio(info['music'])
                     else:
-                        st.error("❌ 提取失败，可能是抖音接口暂时拥堵，请稍后再试。")
+                        st.error("❌ 抖音防线已升级，4个节点全线拥堵。您可以先下载视频到手机，去左侧【Tab 1】使用本地文件提取！")
