@@ -24,7 +24,6 @@ def apply_apple_css():
     st.markdown(
         f"""
         <style>
-        /* 引入 Apple 字体体系 */
         @import url('https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@400;600&display=swap');
         
         .stApp {{
@@ -35,19 +34,17 @@ def apply_apple_css():
             font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif !important;
         }}
         
-        /* 核心卡片：Apple 原生毛玻璃配方 */
         .main .block-container {{
-            background-color: rgba(255, 255, 255, 0.45) !important; /* 更通透的底色 */
-            backdrop-filter: saturate(180%) blur(25px) !important; /* 关键：饱和度提升+强模糊 */
+            background-color: rgba(255, 255, 255, 0.45) !important;
+            backdrop-filter: saturate(180%) blur(25px) !important;
             -webkit-backdrop-filter: saturate(180%) blur(25px) !important;
             padding: 3.5rem !important;
-            border-radius: 32px !important; /* 更大的平滑圆角 */
-            border: 1px solid rgba(255, 255, 255, 0.4) !important; /* 玻璃边缘高光 */
-            box-shadow: 0 16px 40px rgba(0,0,0,0.15) !important; /* 柔和悬浮阴影 */
+            border-radius: 32px !important;
+            border: 1px solid rgba(255, 255, 255, 0.4) !important;
+            box-shadow: 0 16px 40px rgba(0,0,0,0.15) !important;
             margin-top: 2rem !important;
         }}
         
-        /* Apple 风输入框 */
         .stTextInput input {{
             border-radius: 16px !important;
             border: 1px solid rgba(0,0,0,0.05) !important;
@@ -58,15 +55,14 @@ def apply_apple_css():
             box-shadow: inset 0 2px 4px rgba(0,0,0,0.02) !important;
         }}
         .stTextInput input:focus {{
-            border-color: #0071e3 !important; /* Apple 科技蓝 */
+            border-color: #0071e3 !important;
             box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.2) !important;
         }}
         
-        /* Apple 风按钮 */
         .stButton button {{
-            background-color: #0071e3 !important; /* Apple 科技蓝 */
+            background-color: #0071e3 !important;
             color: white !important;
-            border-radius: 20px !important; /* 胶囊圆角 */
+            border-radius: 20px !important;
             padding: 10px 24px !important;
             font-weight: 600 !important;
             border: none !important;
@@ -79,7 +75,6 @@ def apply_apple_css():
             box-shadow: 0 4px 12px rgba(0, 113, 227, 0.3) !important;
         }}
         
-        /* 侧边栏玻璃化 */
         [data-testid="stSidebar"] {{
             background-color: rgba(240, 240, 245, 0.6) !important;
             backdrop-filter: blur(20px) !important;
@@ -93,51 +88,66 @@ def apply_apple_css():
 
 apply_apple_css()
 
-# ================= 3. 核心功能引擎 (抖音双保险 API + B站) =================
+# ================= 3. 核心功能引擎 (三重引擎 + 降维打击) =================
 def extract_clean_url(text):
     url_pattern = r"https?://[-A-Za-z0-9+&@#/%?=~_|!:,.;]+[-A-Za-z0-9+&@#/%=~_|]"
     urls = re.findall(url_pattern, text)
     return urls[0] if urls else None
 
-def download_audio(url):
-    for f in glob.glob("temp_audio.*"):
+def download_media(url):
+    # 清理所有历史缓存文件
+    for f in glob.glob("temp_media.*"):
         try: os.remove(f)
         except: pass
 
-    # 🚀 抖音双保险下载通道
+    # 🚀 抖音专属：三重并发解析引擎
     if "douyin.com" in url:
-        # 尝试路线 1：主 API
+        media_url = None
+        
+        # 引擎 1：最新高可用接口
         try:
-            res1 = requests.get(f"https://tenapi.cn/v2/video?url={url}", timeout=10).json()
-            if res1.get("code") == 200:
-                music_url = res1["data"]["music"]
-            else:
-                raise Exception("主通道忙")
-        except:
-            # 主路线失败，尝试路线 2：备用 API
+            res = requests.get(f"https://api.lolimi.cn/API/douyin/api.php?url={url}", timeout=8).json()
+            if res.get("code") == 200:
+                media_url = res["data"].get("music") or res["data"].get("video")
+        except: pass
+        
+        # 引擎 2：备用接口 vvhan
+        if not media_url:
             try:
-                res2 = requests.get(f"https://api.vvhan.com/api/douyin?url={url}", timeout=10).json()
-                if res2.get("success"):
-                    music_url = res2["music"]
-                else:
-                    raise Exception("备用通道也忙")
-            except:
-                raise Exception("免费解析网络太拥堵了，请休息 2 分钟后再试一试~")
-
-        # 下载拿到链接的音频
+                res = requests.get(f"https://api.vvhan.com/api/douyin?url={url}", timeout=8).json()
+                if res.get("success"):
+                    media_url = res.get("music") or res.get("video")
+            except: pass
+            
+        # 引擎 3：备用接口 tenapi
+        if not media_url:
+            try:
+                res = requests.get(f"https://tenapi.cn/v2/video?url={url}", timeout=8).json()
+                if res.get("code") == 200:
+                    media_url = res["data"].get("music") or res["data"].get("url")
+            except: pass
+            
+        if not media_url:
+            raise Exception("目前抖音网络防护过高，3 个通道全部被拦截，请稍后再试 😭")
+            
+        # 开始下载拿到的链接（可能是mp3也可能是mp4）
         try:
-            audio_data = requests.get(music_url, timeout=15).content
-            with open("temp_audio.mp3", "wb") as f:
-                f.write(audio_data)
-            return "temp_audio.mp3"
-        except Exception as e:
-            raise Exception("下载音频文件时网络中断了")
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0'}
+            media_data = requests.get(media_url, headers=headers, timeout=20).content
+            # 根据链接后缀决定保存为什么格式
+            ext = "mp3" if ".mp3" in media_url else "mp4"
+            filename = f"temp_media.{ext}"
+            with open(filename, "wb") as f:
+                f.write(media_data)
+            return filename
+        except Exception:
+            raise Exception("成功突破防线拿到了媒体地址，但在下载时网络中断了")
 
     # 🚜 B站等常规通道保持不变
-    ydl_opts = {'format': 'bestaudio/best', 'outtmpl': 'temp_audio.%(ext)s', 'quiet': True, 'no_warnings': True}
+    ydl_opts = {'format': 'bestaudio/best', 'outtmpl': 'temp_media.%(ext)s', 'quiet': True, 'no_warnings': True}
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
-    files = glob.glob("temp_audio.*")
+    files = glob.glob("temp_media.*")
     return files[0] if files else None
 
 def audio_to_text(file_path):
@@ -145,9 +155,10 @@ def audio_to_text(file_path):
     headers = {"Authorization": f"Bearer {SILICON_API_KEY}"}
     data = {"model": "FunAudioLLM/SenseVoiceSmall", "response_format": "text"}
     with open(file_path, "rb") as f:
+        # SiliconFlow 非常强大，直接把 mp4 扔给它也能识别！
         response = requests.post(url, files={"file": f}, data=data, headers=headers)
     if response.status_code == 200: return response.text
-    else: raise Exception(f"听写失败: {response.text}")
+    else: raise Exception(f"AI 听写失败: {response.text}")
 
 def summarize_text(text):
     prompt = f"你是一个专业的视频总结助手。请提取以下视频文本的核心主题、干货要点和金句亮点，排版要有极简高级感：\n\n{text}"
@@ -173,7 +184,7 @@ with st.sidebar:
                 st.session_state.display_content = item['summary']
 
 st.markdown("<h1 style='text-align: center; color: #1d1d1f;'>Vision AI</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: #86868b; font-size: 18px;'>智能提炼，一眼即见核心。</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #e5e5ea; font-size: 18px; font-weight: 500;'>智能提炼，一眼即见核心。</p>", unsafe_allow_html=True)
 
 user_input = st.text_input("视频分享链接", placeholder="长按粘贴 B站 或 抖音 链接...")
 
@@ -187,12 +198,12 @@ if st.button("开始解析 (Start)"):
                 clean_url = extract_clean_url(user_input)
                 if not clean_url: raise Exception("无效的链接格式")
                 
-                st.write("2️⃣ 下载流媒体音频...")
-                audio_file = download_audio(clean_url)
-                if not audio_file: raise Exception("媒体提取失败")
+                st.write("2️⃣ 突破防线，提取多媒体流...")
+                media_file = download_media(clean_url)
+                if not media_file: raise Exception("媒体提取失败")
                     
-                st.write("3️⃣ 神经网络识别文字...")
-                transcript = audio_to_text(audio_file)
+                st.write("3️⃣ 神经网络识别转换中...")
+                transcript = audio_to_text(media_file)
                 
                 st.write("4️⃣ 大语言模型提炼中...")
                 summary = summarize_text(transcript)
