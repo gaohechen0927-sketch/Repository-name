@@ -35,24 +35,32 @@ def apply_apple_css():
         }}
         
         .main .block-container {{
-            background-color: rgba(255, 255, 255, 0.45) !important;
+            background-color: rgba(255, 255, 255, 0.65) !important;
             backdrop-filter: saturate(180%) blur(25px) !important;
             -webkit-backdrop-filter: saturate(180%) blur(25px) !important;
             padding: 3.5rem !important;
             border-radius: 32px !important;
-            border: 1px solid rgba(255, 255, 255, 0.4) !important;
+            border: 1px solid rgba(255, 255, 255, 0.5) !important;
             box-shadow: 0 16px 40px rgba(0,0,0,0.15) !important;
             margin-top: 2rem !important;
         }}
         
+        .stMarkdown p, .stMarkdown li, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3, .stMarkdown strong {{
+            color: #1d1d1f !important;
+        }}
+        
+        [data-testid="stSidebar"] p, [data-testid="stSidebar"] span {{
+            color: #1d1d1f !important;
+        }}
+
         .stTextInput input {{
             border-radius: 16px !important;
             border: 1px solid rgba(0,0,0,0.05) !important;
             padding: 14px 20px !important;
-            background-color: rgba(255, 255, 255, 0.7) !important;
+            background-color: rgba(255, 255, 255, 0.8) !important;
+            color: #1d1d1f !important;
             font-size: 16px !important;
             transition: all 0.3s ease !important;
-            box-shadow: inset 0 2px 4px rgba(0,0,0,0.02) !important;
         }}
         .stTextInput input:focus {{
             border-color: #0071e3 !important;
@@ -76,17 +84,28 @@ def apply_apple_css():
         }}
         
         [data-testid="stSidebar"] {{
-            background-color: rgba(240, 240, 245, 0.6) !important;
+            background-color: rgba(240, 240, 245, 0.75) !important;
             backdrop-filter: blur(20px) !important;
             -webkit-backdrop-filter: blur(20px) !important;
             border-right: 1px solid rgba(255,255,255,0.3) !important;
         }}
         
-        /* 美化上传组件 */
-        [data-testid="stFileUploader"] {{
-            background-color: rgba(255,255,255,0.5) !important;
-            border-radius: 16px !important;
-            padding: 10px !important;
+        /* 美化选项卡 Tab 的样式 */
+        .stTabs [data-baseweb="tab-list"] {{
+            gap: 24px;
+            background-color: transparent;
+        }}
+        .stTabs [data-baseweb="tab"] {{
+            height: 50px;
+            white-space: pre-wrap;
+            background-color: transparent;
+            border-radius: 10px 10px 0 0;
+            color: #555 !important;
+            font-weight: 600;
+        }}
+        .stTabs [aria-selected="true"] {{
+            color: #0071e3 !important;
+            border-bottom: 3px solid #0071e3 !important;
         }}
         </style>
         """,
@@ -102,43 +121,32 @@ def extract_clean_url(text):
     urls = re.findall(url_pattern, text)
     return urls[0] if urls else None
 
+# 🚀 新增：专门用于抓取视频信息（文案、无水印链接）的函数
+def fetch_douyin_info(url):
+    apis = [
+        f"https://api.lolimi.cn/API/douyin/api.php?url={url}",
+        f"https://tenapi.cn/v2/video?url={url}",
+        f"https://api.yujn.cn/api/douyin?url={url}"
+    ]
+    for api in apis:
+        try:
+            res = requests.get(api, timeout=6).json()
+            if "data" in res and isinstance(res["data"], dict):
+                return {
+                    "title": res["data"].get("title", "未提取到文案"),
+                    "video": res["data"].get("video") or res["data"].get("url"),
+                    "music": res["data"].get("music")
+                }
+        except: continue
+    return None
+
 def download_media(url):
     for f in glob.glob("temp_media.*"):
         try: os.remove(f)
         except: pass
 
     if "douyin.com" in url:
-        media_url = None
-        # 扩展更多备用节点，增加幸存概率
-        apis = [
-            f"https://api.lolimi.cn/API/douyin/api.php?url={url}",
-            f"https://tenapi.cn/v2/video?url={url}",
-            f"https://api.yujn.cn/api/douyin?url={url}"
-        ]
-        
-        for api in apis:
-            try:
-                res = requests.get(api, timeout=6).json()
-                if "data" in res and isinstance(res["data"], dict):
-                    media_url = res["data"].get("music") or res["data"].get("url") or res["data"].get("video")
-                elif "music" in res or "video" in res:
-                    media_url = res.get("music") or res.get("video")
-                if media_url: break
-            except: continue
-            
-        if not media_url:
-            raise Exception("网络极度拥堵。建议使用 Plan B：直接保存抖音视频并上传！")
-            
-        try:
-            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0'}
-            media_data = requests.get(media_url, headers=headers, timeout=20).content
-            ext = "mp3" if ".mp3" in media_url else "mp4"
-            filename = f"temp_media.{ext}"
-            with open(filename, "wb") as f:
-                f.write(media_data)
-            return filename
-        except Exception:
-            raise Exception("拿到地址了，但下载中断。请使用下方文件上传功能！")
+        raise Exception("抖音防火墙拦截。请直接使用下方【上传视频】功能，100%成功率！")
 
     ydl_opts = {'format': 'bestaudio/best', 'outtmpl': 'temp_media.%(ext)s', 'quiet': True, 'no_warnings': True}
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -178,59 +186,95 @@ with st.sidebar:
                 st.session_state.display_content = item['summary']
 
 st.markdown("<h1 style='text-align: center; color: #1d1d1f;'>Vision AI</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: #e5e5ea; font-size: 18px; font-weight: 500;'>智能提炼，一眼即见核心。</p>", unsafe_allow_html=True)
 
-# 🚀 核心改动：双通道输入（链接 or 文件）
-user_input = st.text_input("🔗 方式一：粘贴视频分享链接", placeholder="长按粘贴 B站 或 抖音 链接...")
-st.markdown("<p style='text-align: center; color: #e5e5ea; font-size: 14px; margin: -10px 0 10px 0;'>— 或 —</p>", unsafe_allow_html=True)
-uploaded_file = st.file_uploader("📂 方式二：直接上传视频/音频 (防网络拥堵 100% 成功率)", type=['mp4', 'mp3', 'm4a', 'wav'])
+# 🚀 引入高级选项卡设计
+tab1, tab2 = st.tabs(["✨ AI 视频总结暗房", "🧰 无水印与文案提取"])
 
-if st.button("开始解析 (Start)"):
-    if not user_input and not uploaded_file:
-        st.warning("⚠️ 请输入链接或上传文件哦")
-    else:
-        with st.status("Apple 芯片引擎启动中...", expanded=True) as status:
-            try:
-                media_file = None
-                input_title = "本地文件解析"
-                
-                # 如果用户传了文件，直接走本地通道（最高优先级）
-                if uploaded_file is not None:
-                    st.write("1️⃣ 检测到本地文件，直接读取...")
-                    file_ext = uploaded_file.name.split('.')[-1]
-                    media_file = f"temp_upload.{file_ext}"
-                    with open(media_file, "wb") as f:
-                        f.write(uploaded_file.getbuffer())
-                    input_title = uploaded_file.name[:15] + "..."
-                
-                # 如果没传文件，走链接解析通道
-                else:
-                    st.write("1️⃣ 解析网络协议与地址...")
-                    clean_url = extract_clean_url(user_input)
-                    if not clean_url: raise Exception("无效的链接格式")
-                    st.write("2️⃣ 突破防线，提取多媒体流...")
-                    media_file = download_media(clean_url)
-                    if not media_file: raise Exception("媒体提取失败")
-                    input_title = user_input[:12] + "..." if len(user_input) > 12 else user_input
+# ----------------- Tab 1: AI 视频总结 -----------------
+with tab1:
+    st.markdown("<p style='text-align: center; color: #1d1d1f; font-size: 16px; margin-top: 10px;'>智能提炼，一眼即见核心。</p>", unsafe_allow_html=True)
+    
+    user_input = st.text_input("🔗 方式一：粘贴链接", placeholder="B站等平台推荐直接粘贴分享链接...", key="ai_input")
+    st.markdown("<p style='text-align: center; color: #1d1d1f; font-size: 14px; margin: -10px 0 10px 0;'>— 或 —</p>", unsafe_allow_html=True)
+    uploaded_file = st.file_uploader("📂 方式二：直接传文件", type=['mp4', 'mp3', 'm4a', 'wav'], help="抖音视频防拦截神器！")
+
+    if st.button("开始解析 (Start)", key="ai_btn"):
+        if not user_input and not uploaded_file:
+            st.warning("⚠️ 请输入链接或上传文件哦")
+        else:
+            with st.status("Apple 芯片引擎启动中...", expanded=True) as status:
+                try:
+                    media_file = None
+                    input_title = "本地文件解析"
                     
-                # 统一转交 AI 处理
-                st.write("⏳ 神经网络识别转换中 (这一步视文件大小可能需要十几秒)...")
-                transcript = audio_to_text(media_file)
-                
-                st.write("🧠 大语言模型提炼中...")
-                summary = summarize_text(transcript)
-                
-                st.session_state.history.append({"title": input_title, "summary": summary})
-                st.session_state.display_content = summary
-                
-                status.update(label="✨ 解析完成", state="complete", expanded=False)
-                st.balloons() 
-                
-            except Exception as e:
-                status.update(label="💥 任务中断", state="error")
-                st.error(f"异常报告：{str(e)}")
-                st.snow()
+                    if uploaded_file is not None:
+                        st.write("1️⃣ 读取本地加密文件...")
+                        file_ext = uploaded_file.name.split('.')[-1]
+                        media_file = f"temp_upload.{file_ext}"
+                        with open(media_file, "wb") as f:
+                            f.write(uploaded_file.getbuffer())
+                        input_title = uploaded_file.name[:15] + "..."
+                    else:
+                        st.write("1️⃣ 解析网络协议与地址...")
+                        clean_url = extract_clean_url(user_input)
+                        if not clean_url: raise Exception("无效的链接格式")
+                        st.write("2️⃣ 突破防线，提取流媒体...")
+                        media_file = download_media(clean_url)
+                        if not media_file: raise Exception("媒体提取失败")
+                        input_title = user_input[:12] + "..." if len(user_input) > 12 else user_input
+                        
+                    st.write("⏳ 神经网络识别转换中...")
+                    transcript = audio_to_text(media_file)
+                    st.write("🧠 大语言模型提炼中...")
+                    summary = summarize_text(transcript)
+                    
+                    st.session_state.history.append({"title": input_title, "summary": summary})
+                    st.session_state.display_content = summary
+                    
+                    status.update(label="✨ 解析完成", state="complete", expanded=False)
+                    st.balloons() 
+                except Exception as e:
+                    status.update(label="💥 任务中断", state="error")
+                    st.error(f"异常报告：{str(e)}")
+                    st.snow()
 
-if st.session_state.display_content:
-    st.divider()
-    st.markdown(st.session_state.display_content)
+    if st.session_state.display_content:
+        st.markdown(
+            f"""<div style="background-color: rgba(255, 255, 255, 0.9); padding: 30px; border-radius: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.08); margin-top: 20px;">
+                {st.session_state.display_content}
+            </div>""", unsafe_allow_html=True
+        )
+
+# ----------------- Tab 2: 无水印与文案提取 (新功能) -----------------
+with tab2:
+    st.markdown("<p style='text-align: center; color: #1d1d1f; font-size: 16px; margin-top: 10px;'>一键去除抖音水印，提取原视频与爆款文案。</p>", unsafe_allow_html=True)
+    
+    tool_input = st.text_input("🔗 请输入抖音分享链接：", placeholder="长按粘贴抖音分享链接...", key="tool_input")
+    
+    if st.button("开始提取 (Extract)", key="tool_btn"):
+        if not tool_input:
+            st.warning("⚠️ 请先粘贴抖音链接哦")
+        else:
+            with st.spinner("正在呼叫黑客接口拦截数据..."):
+                clean_url = extract_clean_url(tool_input)
+                if not clean_url:
+                    st.error("❌ 没找到链接，请检查输入")
+                else:
+                    info = fetch_douyin_info(clean_url)
+                    if info and info.get("video"):
+                        st.success("✅ 拦截成功！")
+                        
+                        # 展示文案并提供一键复制框
+                        st.markdown("### 📝 视频文案")
+                        st.code(info['title'], language="text") # st.code 自带一键复制按钮
+                        
+                        st.markdown("### 🎬 无水印视频")
+                        # 直接在网页播放无水印视频，右下角自带下载按钮
+                        st.video(info['video'])
+                        
+                        # 提供原背景音乐试听
+                        if info.get("music"):
+                            st.markdown("### 🎵 原声背景音乐")
+                            st.audio(info['music'])
+                    else:
+                        st.error("❌ 提取失败，可能是抖音接口暂时拥堵，请稍后再试。")
