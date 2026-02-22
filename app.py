@@ -7,34 +7,30 @@ import os
 from openai import OpenAI
 
 # ================= 1. 基础配置 =================
-st.set_page_config(page_title="全能视频总结神器", page_icon="🎬", layout="centered")
+st.set_page_config(page_title="高赫辰的AI神器", page_icon="📸", layout="centered")
 
 DEEPSEEK_API_KEY = st.secrets["DEEPSEEK_API_KEY"]
 SILICON_API_KEY = st.secrets["SILICON_API_KEY"]
 client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com/v1")
 
+# 初始化历史记录，这是左侧边栏能显示记录的关键！
 if "history" not in st.session_state:
     st.session_state.history = []
 if "display_content" not in st.session_state:
     st.session_state.display_content = ""
 
-# ================= 2. 界面视觉升级 =================
-# ================= 2. 界面视觉升级 (自定义摄影背景) =================
+# ================= 2. 界面视觉升级 (你的专属摄影大作) =================
 def apply_custom_css():
-    # 👇 你的专属摄影大作链接已经完美融合在这里啦 👇
     background_url = "https://raw.githubusercontent.com/gaohechen0927-sketch/Repository-name/main/mybg.jpg.jpg"
-    
     st.markdown(
         f"""
         <style>
-        /* 强制覆盖全屏背景 */
         .stApp {{
             background-image: url("{background_url}") !important;
             background-size: cover !important;
             background-position: center !important;
             background-attachment: fixed !important;
         }}
-        /* 中间内容区域磨砂半透明 */
         .main .block-container {{
             background-color: rgba(255, 255, 255, 0.8) !important;
             backdrop-filter: blur(10px) !important;
@@ -43,17 +39,11 @@ def apply_custom_css():
             box-shadow: 0 8px 32px 0 rgba(0,0,0,0.15) !important;
             margin-top: 2rem !important;
         }}
-        /* 让按钮更好看一点 */
         .stButton button {{
             background-color: #ff4b4b !important;
             color: white !important;
             border-radius: 10px !important;
             font-weight: bold !important;
-            transition: all 0.3s ease !important;
-        }}
-        .stButton button:hover {{
-            transform: scale(1.02) !important;
-            box-shadow: 0 4px 12px rgba(255, 75, 75, 0.3) !important;
         }}
         </style>
         """,
@@ -62,48 +52,37 @@ def apply_custom_css():
 
 apply_custom_css()
 
-
-# ================= 3. 核心功能引擎 (双通道下载) =================
+# ================= 3. 核心功能引擎 (抖音破壁 + B站双通道) =================
 def extract_clean_url(text):
     url_pattern = r"https?://[-A-Za-z0-9+&@#/%?=~_|!:,.;]+[-A-Za-z0-9+&@#/%=~_|]"
     urls = re.findall(url_pattern, text)
     return urls[0] if urls else None
 
 def download_audio(url):
-    """双通道智能下载：抖音走第三方 API，其他走 yt-dlp"""
     for f in glob.glob("temp_audio.*"):
         try: os.remove(f)
         except: pass
 
-    # 🚀 通道 A：专门对付抖音的“偷渡”方案
+    # 🚀 专门对付抖音的 API 通道
     if "douyin.com" in url:
         try:
-            # 调用全网知名的免费无水印解析 API
             api_url = f"https://tenapi.cn/v2/video?url={url}"
             response = requests.get(api_url, timeout=15).json()
-            
             if response.get("code") == 200:
                 music_url = response["data"]["music"]
-                # 直接将音频数据下载到本地
                 audio_data = requests.get(music_url, timeout=15).content
                 with open("temp_audio.mp3", "wb") as f:
                     f.write(audio_data)
                 return "temp_audio.mp3"
             else:
-                raise Exception("免费 API 接口暂时罢工了")
+                raise Exception("免费解析接口暂时繁忙，请稍后再试")
         except Exception as e:
-            raise Exception(f"抖音解析失败，原因：{str(e)}")
+            raise Exception(f"抖音解析遇到问题: {str(e)}")
 
-    # 🚜 通道 B：B站等其他网站的常规抓取方案
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'outtmpl': 'temp_audio.%(ext)s',
-        'quiet': True,
-        'no_warnings': True,
-    }
+    # 🚜 B站等常规通道
+    ydl_opts = {'format': 'bestaudio/best', 'outtmpl': 'temp_audio.%(ext)s', 'quiet': True, 'no_warnings': True}
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
-    
     files = glob.glob("temp_audio.*")
     return files[0] if files else None
 
@@ -113,11 +92,8 @@ def audio_to_text(file_path):
     data = {"model": "FunAudioLLM/SenseVoiceSmall", "response_format": "text"}
     with open(file_path, "rb") as f:
         response = requests.post(url, files={"file": f}, data=data, headers=headers)
-    
-    if response.status_code == 200:
-        return response.text
-    else:
-        raise Exception(f"耳朵听写失败: {response.text}")
+    if response.status_code == 200: return response.text
+    else: raise Exception(f"听写失败: {response.text}")
 
 def summarize_text(text):
     prompt = f"你是一个专业的视频总结助手。请提取以下视频文本的核心主题、干货要点和金句亮点：\n\n{text}"
@@ -130,61 +106,59 @@ def summarize_text(text):
 
 # ================= 4. 网页布局与交互 =================
 with st.sidebar:
-    st.markdown("### 👨‍💻 关于作者")
-    st.write("我是高赫辰，一名对AI与摄影充满热情的高一学生。")
-    st.success("📱 微信：AKKKDDDTTT")
+    st.image("https://cdn-icons-png.flaticon.com/512/3685/3685253.png", width=100)
+    st.markdown("### 👨‍💻 摄影师 & 开发者")
+    st.write("**高赫辰** 的专属 AI 工具。")
     st.divider()
     
-    st.markdown("### 📜 历史总结记录")
+    # 这里是展示历史记录的逻辑
+    st.markdown("### 📜 历史足迹")
     if not st.session_state.history:
-        st.info("还没有总结过视频哦，快去试试吧！")
+        st.caption("这里空空如也...")
     else:
         for i, item in enumerate(reversed(st.session_state.history)):
-            if st.button(f"🎬 {item['title']}", key=f"hist_{i}"):
+            if st.button(f"📄 {item['title']}", key=f"hist_{i}"):
                 st.session_state.display_content = item['summary']
 
-st.title("🎬 全能视频 AI 总结神器")
-st.markdown("支持 B站 / 抖音。**直接粘贴APP里的分享文案即可，不需要单独抠网址！**")
+st.title("📸 高赫辰的视频 AI 暗房")
+st.caption("支持 B站 / 抖音。直接粘贴分享文案即可！")
 
-user_input = st.text_input("🔗 请在此粘贴：", placeholder="例如：【数码博主的年度推荐】 https://b23.tv/slYxUzF")
+user_input = st.text_input("🎞️ 投入你的视频“底片”（分享链接）：")
 
-if st.button("🚀 一键提取并总结"):
+if st.button("🧨 点火！开始冲洗"):
     if not user_input:
-        st.warning("⚠️ 老板，还没输入链接呢！")
+        st.warning("⚠️ 底片呢？还没放入链接哦！")
     else:
-        with st.status("AI 引擎全速运转中...", expanded=True) as status:
+        with st.status("暗房工作中，请稍候...", expanded=True) as status:
             try:
-                st.write("1️⃣ 正在智能剔除多余文案，锁定真实链接...")
+                st.write("1️⃣ 智能解析链接...")
                 clean_url = extract_clean_url(user_input)
-                if not clean_url:
-                    st.error("❌ 没在文本里找到有效的网址，请检查输入！")
-                    st.stop()
+                if not clean_url: raise Exception("没找到有效的链接")
                 
-                st.write(f"👉 成功锁定目标：{clean_url}")
-                    
-                st.write("2️⃣ 突破次元壁，下载音频中 (视时长大约需要 5-15 秒)...")
+                st.write("2️⃣ 提取音频素材...")
                 audio_file = download_audio(clean_url)
-                if not audio_file:
-                    st.error("❌ 音频抓取失败，该视频可能设置了权限防抓取。")
-                    st.stop()
+                if not audio_file: raise Exception("音频提取失败")
                     
-                st.write("3️⃣ 召唤超级耳朵，听写转换中...")
+                st.write("3️⃣ 转化为文字底稿...")
                 transcript = audio_to_text(audio_file)
                 
-                st.write("4️⃣ 大脑深度思考，生成提炼总结...")
+                st.write("4️⃣ AI 后期处理中，正在出片...")
                 summary = summarize_text(transcript)
                 
-                # 存入历史记录
+                # 记录成功，保存历史，放气球！
                 short_title = user_input[:15] + "..." if len(user_input) > 15 else user_input
                 st.session_state.history.append({"title": short_title, "summary": summary})
                 st.session_state.display_content = summary
                 
-                status.update(label="✅ 全部处理完成！", state="complete", expanded=False)
+                status.update(label="✨ 冲洗完成！完美出片！", state="complete", expanded=False)
+                st.balloons() # 庆祝气球特效！
+                
             except Exception as e:
-                status.update(label="❌ 出现错误！", state="error")
-                st.error(f"抱歉出错了，具体信息：{str(e)}")
+                status.update(label="💥 冲洗失败！", state="error")
+                st.error(f"错误原因：{str(e)}")
+                st.snow() # 失败下雪特效
 
-# 集中显示
 if st.session_state.display_content:
     st.divider()
+    st.markdown("### 🖼️ 最终成片：")
     st.markdown(st.session_state.display_content)
